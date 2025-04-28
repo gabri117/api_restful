@@ -12,10 +12,11 @@ class ProductList extends StatefulWidget {
 }
 
 class _ProductListState extends State<ProductList> {
-  late Future<List<Product>> _allProductsFuture;
-  late Future<List<Product>> _userProductsFuture;
+  Future<List<Product>> _allProductsFuture = Future.value([]);
+  Future<List<Product>> _userProductsFuture = Future.value([]);
   List<String> _userProductIds = [];
   bool _isLoading = false;
+  bool _isInitialLoad = true;
 
   @override
   void initState() {
@@ -24,14 +25,30 @@ class _ProductListState extends State<ProductList> {
   }
 
   Future<void> _loadProducts() async {
-    setState(() => _isLoading = true);
-    _userProductIds = await ProductStorage.getIds();
+    if (!mounted) return;
     
-    setState(() {
-      _allProductsFuture = ApiService.getProducts();
-      _userProductsFuture = ApiService.getUserProducts(_userProductIds);
-      _isLoading = false;
-    });
+    setState(() => _isLoading = true);
+    
+    try {
+      _userProductIds = await ProductStorage.getIds();
+      setState(() {
+        _allProductsFuture = ApiService.getProducts().then((products) {
+          return products.where((p) => !_userProductIds.contains(p.id)).toList();
+        });
+        _userProductsFuture = ApiService.getUserProducts(_userProductIds);
+        _isInitialLoad = false;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al cargar productos: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   void _showAddProductForm() {
@@ -112,94 +129,35 @@ class _ProductListState extends State<ProductList> {
             ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: _loadProducts,
-        child: CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Text(
-                  'Mis Productos',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
+      body: _isInitialLoad
+          ? const Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
+              onRefresh: _loadProducts,
+              child: CustomScrollView(
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Text(
+                        'Mis Productos',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                    ),
+                  ),
+                  _buildUserProductsList(),
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Text(
+                        'Productos de Muestra (solo lectura)',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                    ),
+                  ),
+                  _buildSampleProductsList(),
+                ],
               ),
             ),
-            FutureBuilder<List<Product>>(
-              future: _userProductsFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const SliverFillRemaining(
-                    child: Center(child: CircularProgressIndicator()),
-                  );
-                }
-                
-                if (snapshot.hasError) {
-                  return SliverToBoxAdapter(
-                    child: Center(child: Text('Error: ${snapshot.error}')),
-                  );
-                }
-                
-                final userProducts = snapshot.data ?? [];
-                
-                if (userProducts.isEmpty) {
-                  return const SliverToBoxAdapter(
-                    child: Center(child: Text('No has creado productos aún')),
-                  );
-                }
-                
-                return SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final product = userProducts[index];
-                      return _buildUserProductItem(product);
-                    },
-                    childCount: userProducts.length,
-                  ),
-                );
-              },
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Text(
-                  'Productos de Muestra (solo lectura)',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-              ),
-            ),
-            FutureBuilder<List<Product>>(
-              future: _allProductsFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const SliverFillRemaining(
-                    child: Center(child: CircularProgressIndicator()),
-                  );
-                }
-                
-                if (snapshot.hasError) {
-                  return SliverToBoxAdapter(
-                    child: Center(child: Text('Error: ${snapshot.error}')),
-                  );
-                }
-                
-                final allProducts = snapshot.data ?? [];
-                final sampleProducts = allProducts.where((p) => !_userProductIds.contains(p.id)).toList();
-                
-                return SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final product = sampleProducts[index];
-                      return _buildSampleProductItem(product);
-                    },
-                    childCount: sampleProducts.length,
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
       floatingActionButton: FloatingActionButton(
         onPressed: _isLoading ? null : _showAddProductForm,
         child: const Icon(Icons.add),
@@ -207,7 +165,69 @@ class _ProductListState extends State<ProductList> {
     );
   }
 
-  Widget _buildUserProductItem(Product product) {
+  Widget _buildUserProductsList() {
+    return FutureBuilder<List<Product>>(
+      future: _userProductsFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting && !_isInitialLoad) {
+          return const SliverToBoxAdapter(
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+        
+        if (snapshot.hasError) {
+          return SliverToBoxAdapter(
+            child: Center(child: Text('Error: ${snapshot.error}')),
+          );
+        }
+        
+        final userProducts = snapshot.data ?? [];
+        
+        if (userProducts.isEmpty) {
+          return const SliverToBoxAdapter(
+            child: Center(child: Text('No has creado productos aún')),
+          );
+        }
+        
+        return SliverList(
+          delegate: SliverChildBuilderDelegate(
+            (context, index) => _buildProductItem(userProducts[index]),
+            childCount: userProducts.length,
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSampleProductsList() {
+    return FutureBuilder<List<Product>>(
+      future: _allProductsFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SliverToBoxAdapter(
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+        
+        if (snapshot.hasError) {
+          return SliverToBoxAdapter(
+            child: Center(child: Text('Error: ${snapshot.error}')),
+          );
+        }
+        
+        final sampleProducts = snapshot.data ?? [];
+        
+        return SliverList(
+          delegate: SliverChildBuilderDelegate(
+            (context, index) => _buildSampleProductItem(sampleProducts[index]),
+            childCount: sampleProducts.length,
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildProductItem(Product product) {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: ListTile(
