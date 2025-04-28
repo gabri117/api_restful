@@ -26,14 +26,16 @@ class _ProductListState extends State<ProductList> {
 
   Future<void> _loadProducts() async {
     if (!mounted) return;
-    
+
     setState(() => _isLoading = true);
-    
+
     try {
       _userProductIds = await ProductStorage.getIds();
       setState(() {
         _allProductsFuture = ApiService.getProducts().then((products) {
-          return products.where((p) => !_userProductIds.contains(p.id)).toList();
+          return products
+              .where((p) => !_userProductIds.contains(p.id))
+              .toList();
         });
         _userProductsFuture = ApiService.getUserProducts(_userProductIds);
         _isInitialLoad = false;
@@ -55,9 +57,7 @@ class _ProductListState extends State<ProductList> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (context) => ProductForm(
-        onSuccess: _loadProducts,
-      ),
+      builder: (context) => ProductForm(onSuccess: _loadProducts),
     );
   }
 
@@ -65,30 +65,32 @@ class _ProductListState extends State<ProductList> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (context) => ProductForm(
-        product: product,
-        onSuccess: _loadProducts,
-      ),
+      builder:
+          (context) => ProductForm(product: product, onSuccess: _loadProducts),
     );
   }
 
   Future<void> _deleteProduct(String id) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Confirmar Eliminación'),
-        content: const Text('¿Estás seguro de eliminar este producto?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Confirmar Eliminación'),
+            content: const Text('¿Estás seguro de eliminar este producto?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancelar'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text(
+                  'Eliminar',
+                  style: TextStyle(color: Colors.red),
+                ),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Eliminar', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
     );
 
     if (confirmed == true) {
@@ -106,9 +108,9 @@ class _ProductListState extends State<ProductList> {
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error al eliminar: $e')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Error al eliminar: $e')));
         }
       } finally {
         if (mounted) setState(() => _isLoading = false);
@@ -125,39 +127,42 @@ class _ProductListState extends State<ProductList> {
           if (_isLoading)
             const Padding(
               padding: EdgeInsets.only(right: 16.0),
-              child: Center(child: CircularProgressIndicator(color: Colors.white)),
+              child: Center(
+                child: CircularProgressIndicator(color: Colors.white),
+              ),
             ),
         ],
       ),
-      body: _isInitialLoad
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: _loadProducts,
-              child: CustomScrollView(
-                slivers: [
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Text(
-                        'Mis Productos',
-                        style: Theme.of(context).textTheme.titleLarge,
+      body:
+          _isInitialLoad
+              ? const Center(child: CircularProgressIndicator())
+              : RefreshIndicator(
+                onRefresh: _loadProducts,
+                child: CustomScrollView(
+                  slivers: [
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Text(
+                          'Mis Productos',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
                       ),
                     ),
-                  ),
-                  _buildUserProductsList(),
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Text(
-                        'Productos de Muestra (solo lectura)',
-                        style: Theme.of(context).textTheme.titleLarge,
+                    _buildUserProductsList(),
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Text(
+                          'Productos de Muestra (solo lectura)',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
                       ),
                     ),
-                  ),
-                  _buildSampleProductsList(),
-                ],
+                    _buildSampleProductsList(),
+                  ],
+                ),
               ),
-            ),
       floatingActionButton: FloatingActionButton(
         onPressed: _isLoading ? null : _showAddProductForm,
         child: const Icon(Icons.add),
@@ -169,26 +174,27 @@ class _ProductListState extends State<ProductList> {
     return FutureBuilder<List<Product>>(
       future: _userProductsFuture,
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting && !_isInitialLoad) {
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !_isInitialLoad) {
           return const SliverToBoxAdapter(
             child: Center(child: CircularProgressIndicator()),
           );
         }
-        
+
         if (snapshot.hasError) {
           return SliverToBoxAdapter(
             child: Center(child: Text('Error: ${snapshot.error}')),
           );
         }
-        
+
         final userProducts = snapshot.data ?? [];
-        
+
         if (userProducts.isEmpty) {
           return const SliverToBoxAdapter(
             child: Center(child: Text('No has creado productos aún')),
           );
         }
-        
+
         return SliverList(
           delegate: SliverChildBuilderDelegate(
             (context, index) => _buildProductItem(userProducts[index]),
@@ -208,15 +214,15 @@ class _ProductListState extends State<ProductList> {
             child: Center(child: CircularProgressIndicator()),
           );
         }
-        
+
         if (snapshot.hasError) {
           return SliverToBoxAdapter(
             child: Center(child: Text('Error: ${snapshot.error}')),
           );
         }
-        
+
         final sampleProducts = snapshot.data ?? [];
-        
+
         return SliverList(
           delegate: SliverChildBuilderDelegate(
             (context, index) => _buildSampleProductItem(sampleProducts[index]),
@@ -261,18 +267,34 @@ class _ProductListState extends State<ProductList> {
   Widget _buildSampleProductItem(Product product) {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      color: Colors.grey[100],
+      color: Color(
+        0xFF333333,
+      ), // Fondo gris oscuro claro para las tarjetas de muestra
       child: ListTile(
-        title: Text(product.name),
+        title: Text(
+          product.name,
+          style: TextStyle(
+            color: Colors.white,
+          ), // Texto en blanco para el nombre del producto
+        ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('ID: ${product.id}'),
+            Text(
+              'ID: ${product.id}',
+              style: TextStyle(color: Colors.white70),
+            ), // ID con color gris claro
             if (product.data['price'] != null)
-              Text('Precio: \$${product.data['price']}'),
+              Text(
+                'Precio: \$${product.data['price']}',
+                style: TextStyle(color: Colors.white70),
+              ), // Precio con gris claro
           ],
         ),
-        trailing: const Icon(Icons.lock, color: Colors.grey),
+        trailing: const Icon(
+          Icons.lock,
+          color: Colors.grey, // El icono de "solo lectura" con color gris
+        ),
         onTap: () => _showProductDetails(product),
       ),
     );
@@ -281,29 +303,33 @@ class _ProductListState extends State<ProductList> {
   void _showProductDetails(Product product) {
     showModalBottomSheet(
       context: context,
-      builder: (context) => SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              product.name,
-              style: Theme.of(context).textTheme.titleLarge,
+      builder:
+          (context) => SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  product.name,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 16),
+                Text('ID: ${product.id}'),
+                const SizedBox(height: 8),
+                const Text(
+                  'Detalles:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                ...product.data.entries.map(
+                  (e) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Text('${e.key}: ${e.value}'),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
             ),
-            const SizedBox(height: 16),
-            Text('ID: ${product.id}'),
-            const SizedBox(height: 8),
-            const Text('Detalles:', style: TextStyle(fontWeight: FontWeight.bold)),
-            ...product.data.entries.map((e) => 
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Text('${e.key}: ${e.value}'),
-              )
-            ),
-            const SizedBox(height: 16),
-          ],
-        ),
-      ),
+          ),
     );
   }
 }
